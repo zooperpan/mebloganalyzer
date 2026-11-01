@@ -152,7 +152,19 @@ public class TablePopup extends JPopupMenu {
 			label = new JLabel(call.getWarningString());
 			label.setFont(new Font("Arial", Font.PLAIN, 12));
 			label.setForeground(new Color(200, 150, 50));
-			panel.add(label, new GridBagConstraints (x + 1, y++, 1, 1, 
+			panel.add(label, new GridBagConstraints (x + 1, y++, 1, 1,
+					1.0, 1.0, GridBagConstraints.BASELINE_LEADING,
+					GridBagConstraints.NONE, new Insets(5, 5, 0, 5), 0, 0));
+		}
+		// Ambiguity (shown in addition to any error or warning)
+		if (call.isAmbiguous()) {
+			panel.add(new JLabel("Ambiguous:"), new GridBagConstraints (x, y, 1, 1,
+					1.0, 1.0, GridBagConstraints.BASELINE_LEADING,
+					GridBagConstraints.NONE, new Insets(5, 5, 0, 5), 0, 0));
+			label = new JLabel(call.getAmbiguityWarning());
+			label.setFont(new Font("Arial", Font.PLAIN, 12));
+			label.setForeground(new Color(200, 150, 50));
+			panel.add(label, new GridBagConstraints (x + 1, y++, 1, 1,
 					1.0, 1.0, GridBagConstraints.BASELINE_LEADING,
 					GridBagConstraints.NONE, new Insets(5, 5, 0, 5), 0, 0));
 		}

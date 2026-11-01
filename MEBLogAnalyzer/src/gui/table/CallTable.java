@@ -134,7 +134,7 @@ public class CallTable extends JPanel {
 				Color bgColor = defaultColor;
 				if (call.isErrorFound()) {
 					bgColor = errorColor;
-				} else if (call.isWarningFound()) {
+				} else if (call.isWarningFound() || call.isAmbiguous()) {
 					bgColor = warningColor;
 				}
 				data[row][0] = new SimpleCellPanel(String.format("%08x", call.getCallID()), bgColor);

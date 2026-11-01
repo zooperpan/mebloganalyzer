@@ -42,6 +42,7 @@ public class SesAudioTraceMarkFindCallID extends TraceMarkAction {
 	 */
 	@Override
 	public Call markAction(ArrayList<Call> calls, RawTrace trace) {
+		checkAmbiguousCalls(calls, trace, CallAnalysisState.SEND_FINAL_200OK);
 		// Find the call that is in SEND_FINAL_200OK state
 		for (Call call: calls) {
 			if (call.getCallAnalysisState() == CallAnalysisState.SEND_FINAL_200OK) {

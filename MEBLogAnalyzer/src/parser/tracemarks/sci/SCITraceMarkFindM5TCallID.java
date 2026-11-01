@@ -60,6 +60,7 @@ public class SCITraceMarkFindM5TCallID extends TraceMarkAction {
 	@Override
 	public Call markAction(ArrayList<Call> calls, RawTrace trace) {
 		if (incoming) {
+			checkAmbiguousCalls(calls, trace, CallAnalysisState.INVITED);
 			// For incoming calls find the call that is in INVITED state
 			for (Call call: calls) {
 				if ((call.getCallAnalysisState() == CallAnalysisState.INVITED)) {

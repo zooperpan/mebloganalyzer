@@ -64,6 +64,7 @@ public class Call {
 	private String errorString;
 	private boolean warningFound;
 	private String warningString;
+	private String ambiguityWarning;
 	private boolean fax;
 	private boolean mwi;
 	private boolean makeCall;
@@ -95,6 +96,7 @@ public class Call {
 		setRemoteRTPAddress("");
 		setErrorFound(false);
 		setErrorString("");
+		setAmbiguityWarning("");
 		setEndDate("");
 		setEstablishedDate("");
 		setFAX(false);
@@ -669,5 +671,31 @@ public class Call {
 	 */
 	public void setEstablishedDate(String establishedDate) {
 		this.establishedDate = establishedDate;
+	}
+
+	/**
+	 * Returns true if a trace without callID may have been assigned to the wrong call, because several calls
+	 * were waiting for it at the same time.
+	 * @return true if the traces of this call may be mixed with another call
+	 */
+	public boolean isAmbiguous() {
+		return ambiguityWarning.length() > 0;
+	}
+
+	/**
+	 * Returns the ambiguity warning of the call. It is kept separately from the {@link #getWarningString() warning},
+	 * since that one is overwritten or cleared during the analysis of the call.
+	 * @return the ambiguity warning of the call, an empty string if there is none
+	 */
+	public String getAmbiguityWarning() {
+		return ambiguityWarning;
+	}
+
+	/**
+	 * Sets the ambiguity warning of the call to the specified value.
+	 * @param ambiguityWarning the ambiguity warning of the call, an empty string if there is none
+	 */
+	public void setAmbiguityWarning(String ambiguityWarning) {
+		this.ambiguityWarning = ambiguityWarning;
 	}
 }

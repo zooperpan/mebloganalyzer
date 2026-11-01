@@ -42,6 +42,8 @@ public class CPUTraceMarkGenerateCall extends TraceMarkAction {
 	 */
 	@Override
 	public Call markAction(ArrayList<Call> calls, RawTrace trace) {
+		checkAmbiguousCalls(calls, trace, CallAnalysisState.FAX_CALL_RECEIVED, CallAnalysisState.MWI_CALL_RECEIVED,
+				CallAnalysisState.MAKE_CALL_RECEIVED, CallAnalysisState.CONSULT_CALL_RECEIVED);
 		// Go through all call
 		for (Call call: calls) {
 			// Find the call that is in FAX_CALL_RECEIVED state

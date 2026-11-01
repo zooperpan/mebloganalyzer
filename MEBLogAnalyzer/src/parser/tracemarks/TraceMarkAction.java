@@ -4,6 +4,7 @@ import java.util.ArrayList;
 
 import meb.entities.Call;
 import parser.RawTrace;
+import parser.call.CallAnalysisState;
 
 /**
  * The abstract <code>TraceMarkAction</code> class can be used in order to analyze specific trace lines within
@@ -90,5 +91,35 @@ public abstract class TraceMarkAction {
 	 */
 	public void setCallToBeAdded(boolean callToBeAdded) {
 		this.callToBeAdded = callToBeAdded;
+	}
+
+	/**
+	 * Checks if more than one call is waiting in the specified {@link CallAnalysisState analysis states}. A trace
+	 * without callID is assigned to the first call found in the expected state, so if several calls are waiting
+	 * the trace may be assigned to the wrong call. In that case all the waiting calls are marked as
+	 * {@link Call#isAmbiguous() ambiguous}. Should be called before the state of the chosen call is changed.
+	 * @param calls the list of already found calls
+	 * @param trace the trace line being analyzed
+	 * @param states the analysis states in which a call can be waiting for this trace
+	 */
+	protected void checkAmbiguousCalls(ArrayList<Call> calls, RawTrace trace, CallAnalysisState... states) {
+		ArrayList<Call> waitingCalls = new ArrayList<Call>();
+		for (Call call: calls) {
+			for (CallAnalysisState state: states) {
+				if (call.getCallAnalysisState() == state) {
+					waitingCalls.add(call);
+					break;
+				}
+			}
+		}
+		if (waitingCalls.size() > 1) {
+			String warning = waitingCalls.size() + " calls were waiting for the same trace at " + trace.getTime() +
+					", traces of this call may belong to another call";
+			for (Call call: waitingCalls) {
+				// Keep the first ambiguity found for each call
+				if (!call.isAmbiguous())
+					call.setAmbiguityWarning(warning);
+			}
+		}
 	}
 }

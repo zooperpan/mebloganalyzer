@@ -76,6 +76,7 @@ public class SCITraceMarkFindIncomingSDP extends TraceMarkAction {
 			call.setInSDP(sdp);
 			return call;
 		} else {
+			checkAmbiguousCalls(calls, trace, CallAnalysisState.SEND_100_TRYING);
 			// Find the call that is in SEND_100_TRYING state
 			for (Call call: calls) {
 				try {

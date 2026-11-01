@@ -82,6 +82,7 @@ public class SCITraceMarkFindOutgoingSDP extends TraceMarkAction {
 			}
 			return call;
 		} else {
+			checkAmbiguousCalls(calls, trace, incoming ? CallAnalysisState.DUMPING_INCOMING_SDP : CallAnalysisState.OUT_CALL_ID_CREATED);
 			for (Call call: calls) {
 				// Find the call that is in DUMPING_INCOMING_SDP state
 				if ((call.getCallAnalysisState() == CallAnalysisState.DUMPING_INCOMING_SDP) && incoming) {
