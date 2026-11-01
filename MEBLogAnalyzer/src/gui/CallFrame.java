@@ -95,26 +95,44 @@ public class CallFrame extends JInternalFrame {
 			}
 		}
 
+		public void mousePressed(MouseEvent me) {
+			// On Linux the popup trigger is the mouse press
+			if (me.isPopupTrigger()) {
+				selectRowAtPoint(me);
+				showPopup(me);
+			}
+		}
+
 		public void mouseReleased(MouseEvent me) {
+			selectRowAtPoint(me);
+			// On Windows the popup trigger is the mouse release
+			if (me.isPopupTrigger()) {
+				showPopup(me);
+			}
+		}
+
+		/**
+		 * Selects the table row under the mouse, or clears the selection if there is no row there.
+		 */
+		private void selectRowAtPoint(MouseEvent me) {
 			int r = callTable.rowAtPoint(me.getPoint());
 			if (r >= 0 && r < callTable.getRowCount()) {
 				callTable.setRowSelectionInterval(r, r);
 			} else {
 				callTable.clearSelection();
 			}
+		}
 
-			int rowindex = callTable.getSelectedRow();
-			if (rowindex < 0)
-				return;
-
-			if (me.getButton() == MouseEvent.BUTTON3) {
-				int selectedRow = callTable.getSelectedRow();
-				if (selectedRow < 0) return;
-				Call call = callTable.getCall(selectedRow);
-				if (me.isPopupTrigger() && me.getComponent() instanceof JTable ) {
-					TablePopup popup = new TablePopup(call);
-					popup.show(me.getComponent(), me.getX(), me.getY());
-				}
+		/**
+		 * Shows the popup with the details of the selected call.
+		 */
+		private void showPopup(MouseEvent me) {
+			int selectedRow = callTable.getSelectedRow();
+			if (selectedRow < 0) return;
+			Call call = callTable.getCall(selectedRow);
+			if (me.getComponent() instanceof JTable) {
+				TablePopup popup = new TablePopup(call);
+				popup.show(me.getComponent(), me.getX(), me.getY());
 			}
 		}
 	}

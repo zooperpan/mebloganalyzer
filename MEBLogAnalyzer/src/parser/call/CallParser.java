@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import gui.GUIStatic;
+import gui.StyledTextPane;
 import meb.entities.Call;
 import parser.ParserProgressListener;
 import parser.RawTrace;
@@ -23,7 +25,19 @@ public class CallParser {
 	 * {@link ParserProgressListener progress listener}
 	 */
 	private static final int TRACES_BEFORE_PROGRESS = 1000;
+
+	/**
+	 * Maximum number of skipped traces that are reported individually in the log. Any further skipped traces are only counted.
+	 */
+	private static final int MAX_REPORTED_SKIPPED_TRACES = 10;
+
+	/**
+	 * Maximum number of characters of a skipped trace that are shown in the log.
+	 */
+	private static final int MAX_REPORTED_TRACE_LENGTH = 100;
+
 	private List<RawTrace> rawTraceLines = null;
+	private int skippedTraces = 0;
 	private HashMap<Long, Call> callsMap = null;
 	private ArrayList<Call> callsList = null;
 	private ParserProgressListener progressListener = null;
@@ -55,19 +69,24 @@ public class CallParser {
 		// Go through all trace lines
 		for (RawTrace trace: rawTraceLines) {
 			completedTraces++;
-			// Check if we have a callID and there is already a known call for it
-			if (callsMap.containsKey(Long.valueOf(trace.getCallID()))) {
-				// Call Manager will handle the trace for the found call
-				callManager.handleTrace(trace, callsMap.get(Long.valueOf(trace.getCallID())));
-			} else {
-				// Call Manager will check for which call this trace is for
-				Call call = callManager.checkCallForTrace(trace);
-				// Returns != null only if this is a trace indicating a new call
-				if (call != null) {
-					// Add the new call in the map and list of calls
-					callsMap.put(call.getCallID(), call);
-					callsList.add(call);
+			try {
+				// Check if we have a callID and there is already a known call for it
+				if (callsMap.containsKey(Long.valueOf(trace.getCallID()))) {
+					// Call Manager will handle the trace for the found call
+					callManager.handleTrace(trace, callsMap.get(Long.valueOf(trace.getCallID())));
+				} else {
+					// Call Manager will check for which call this trace is for
+					Call call = callManager.checkCallForTrace(trace);
+					// Returns != null only if this is a trace indicating a new call
+					if (call != null) {
+						// Add the new call in the map and list of calls
+						callsMap.put(call.getCallID(), call);
+						callsList.add(call);
+					}
 				}
+			} catch (RuntimeException e) {
+				// A trace with unexpected content should not stop the analysis of the rest of the calls
+				skipTrace(trace, e);
 			}
 			// Check if it is time to update the progress
 			if (readForProgress-- == 0) {
@@ -75,7 +94,26 @@ public class CallParser {
 				progressListener.progress((int)((completedTraces * 100) / traceSize));
 			}
 		}
+		if (skippedTraces > 0)
+			GUIStatic.printLog("Skipped " + skippedTraces + " trace(s) that could not be analyzed", StyledTextPane.WARNING);
 		return result;
+	}
+
+	/**
+	 * Skips a trace that could not be analyzed. The first {@link #MAX_REPORTED_SKIPPED_TRACES} skipped traces are
+	 * reported in the log, the rest are only counted.
+	 * @param trace the trace to be skipped
+	 * @param e the exception thrown while analyzing the trace
+	 */
+	private void skipTrace(RawTrace trace, RuntimeException e) {
+		skippedTraces++;
+		if (skippedTraces <= MAX_REPORTED_SKIPPED_TRACES) {
+			String text = trace.getTrace().replace('\n', ' ');
+			if (text.length() > MAX_REPORTED_TRACE_LENGTH)
+				text = text.substring(0, MAX_REPORTED_TRACE_LENGTH) + "...";
+			GUIStatic.printLog("Could not analyze trace (" + e + "): " + text, StyledTextPane.WARNING);
+			e.printStackTrace();
+		}
 	}
 
 	/**

@@ -1,6 +1,7 @@
 package gui;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import javax.swing.JOptionPane;
 import javax.swing.JProgressBar;
@@ -10,7 +11,7 @@ import gui.dialog.ProgressBarDialog;
 import parser.ParserProgressListener;
 import parser.TraceParser;
 
-public class ParseWorker extends SwingWorker<Void, Integer> implements ParserProgressListener {
+public class ParseWorker extends SwingWorker<Boolean, Integer> implements ParserProgressListener {
 
 	private MainFrame frame = null;
 	private TraceParser parser = null;
@@ -35,9 +36,8 @@ public class ParseWorker extends SwingWorker<Void, Integer> implements ParserPro
 	}
 
 	@Override
-	protected Void doInBackground() throws Exception {
-		parser.parse();
-		return null;
+	protected Boolean doInBackground() throws Exception {
+		return parser.parse();
 	}
 
 	@Override
@@ -48,7 +48,20 @@ public class ParseWorker extends SwingWorker<Void, Integer> implements ParserPro
 	@Override
 	public void done() {
 		pbd.dispose();
-		if (parser.getCalls().size() > 0) {
+		boolean parsed = false;
+		try {
+			parsed = get();
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		} catch (ExecutionException e) {
+			// Errors thrown in the background (e.g. OutOfMemoryError) are only visible through get()
+			Throwable cause = e.getCause();
+			GUIStatic.textPaneStyle.print("Analysis of file " + path + " failed: " + cause, StyledTextPane.ERROR);
+			cause.printStackTrace();
+		}
+		if (!parsed) {
+			JOptionPane.showMessageDialog(frame, "Could not analyze the log file! See the LOG for details.", "Error", JOptionPane.ERROR_MESSAGE);
+		} else if (parser.getCalls().size() > 0) {
 			GUIStatic.textPaneStyle.print("Number of calls found: " + parser.getCalls().size(), StyledTextPane.MESSAGE);
 			frame.createFrame(path, parser.getCalls());
 		} else {

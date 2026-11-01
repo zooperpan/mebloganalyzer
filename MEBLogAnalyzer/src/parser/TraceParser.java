@@ -35,10 +35,26 @@ public class TraceParser {
 	 */
 	private static final Pattern DATE_PATTERN = Pattern.compile("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}.\\d{3})[\\s\\S]*$");
 
+	/**
+	 * Maximum number of skipped lines that are reported individually in the log. Any further skipped lines are only counted.
+	 */
+	private static final int MAX_REPORTED_SKIPPED_LINES = 10;
+
+	/**
+	 * Maximum number of characters of a skipped line that are shown in the log.
+	 */
+	private static final int MAX_REPORTED_LINE_LENGTH = 100;
+
 	private ParserProgressListener progressListener = null;
 	private String path;
 	private List<RawTrace> rawTraceLines;
 	private CallParser callParser = null;
+	private long lineNumber = 0;
+	private int skippedLines = 0;
+	/**
+	 * True while the lines following a skipped trace line are being ignored, so that they are not appended to the previous trace.
+	 */
+	private boolean skippingTrace = false;
 
 	/**
 	 * Creates a new {@link TraceParser} object. The path of the MEB trace file to be analyzed is passed as parameter. In addition, it needs a
@@ -60,13 +76,18 @@ public class TraceParser {
 		boolean result = false;
 		try {
 			progressListener.setInfo("Parsing trace file...");
-			result = readTraceFile(path);
+			if (!readTraceFile(path)) {
+				GUIStatic.printLog("Could not read file " + path, StyledTextPane.ERROR);
+				return false;
+			}
+			if (skippedLines > 0)
+				GUIStatic.printLog("Skipped " + skippedLines + " line(s) that do not match the expected trace format", StyledTextPane.WARNING);
 			Thread.sleep(100);
 			progressListener.setInfo("Parsing calls...");
 			callParser = new CallParser(rawTraceLines, progressListener);
 			result = callParser.parse();
 		} catch (Exception e) {
-			GUIStatic.printLog(e.getMessage(), StyledTextPane.ERROR);
+			GUIStatic.printLog("Analysis of file " + path + " failed: " + e, StyledTextPane.ERROR);
 			e.printStackTrace();
 		}
 		return result;
@@ -94,6 +115,7 @@ public class TraceParser {
 		try {
 			boolean previousTraceComplete = true;
 			while ((line = bufferedReaderInput.readLine()) != null) {
+				lineNumber++;
 				completedBytes += line.length();
 				if (previousTraceComplete)
 					previousTraceComplete = parseLine(line);
@@ -136,39 +158,48 @@ public class TraceParser {
 	/**
 	 * Tries to analyze a line in the trace file and create the relevant {@link RawTrace}.
 	 * @param line the trace line to be analyzed
-	 * @return true if the analysis is complete, false if it detects that more data (next trace lines) are needed 
+	 * @return true if the analysis is complete, false if it detects that more data (next trace lines) are needed
 	 * to complete it.
 	 */
 	private boolean parseLine(String line) {
 		boolean result = true;
 		Matcher matcher = DATE_PATTERN.matcher(line);
 		if (matcher.find()) {
+			skippingTrace = false;
+			String rawLine = line;
 			String time = matcher.group(1);
 			line = line.replaceFirst(time, "").trim();
-			String component = line.substring(0, 12).trim();
+			String component;
 			int level = 0;
-			// In case of VISU trace at SCI, we may have only 1 byte for level and no callID
-			if (line.length() < 14)
-				level = Integer.parseInt(line.substring(12, 13).trim());
-			// Otherwise, check 2 bytes for level
-			else level = Integer.parseInt(line.substring(12, 14).trim());
 			long callID = -1;
-			try {
-				// In case of VISU trace at SCI we do not have a callID
-				if (line.length() > 14) {
-					callID = Long.parseLong(line.substring(14, 22).trim(), 16);
-				}
-			} catch (NumberFormatException e) {}
 			String message = "";
-			// In case of VISU trace we do not have a message
-			if (line.length() > 22)
-				message = line.substring(22).trim();
+			try {
+				component = line.substring(0, 12).trim();
+				// In case of VISU trace at SCI, we may have only 1 byte for level and no callID
+				if (line.length() < 14)
+					level = Integer.parseInt(line.substring(12, 13).trim());
+				// Otherwise, check 2 bytes for level
+				else level = Integer.parseInt(line.substring(12, 14).trim());
+				try {
+					// In case of VISU trace at SCI we do not have a callID
+					if (line.length() > 14) {
+						callID = Long.parseLong(line.substring(14, 22).trim(), 16);
+					}
+				} catch (NumberFormatException e) {}
+				// In case of VISU trace we do not have a message
+				if (line.length() > 22)
+					message = line.substring(22).trim();
+			} catch (IndexOutOfBoundsException | NumberFormatException e) {
+				// The line does not have the expected format, skip it together with its continuation lines
+				skipLine(rawLine);
+				return true;
+			}
 			rawTraceLines.add(new RawTrace(time, component, level, callID, new StringBuffer(message)));
 			// If no message found, return that trace is not complete
 			if (message.length() == 0)
 				result = false;
 		} else {
-			if ((rawTraceLines.size() > 0) && (line.length() > 0)) {
+			if (!skippingTrace && (rawTraceLines.size() > 0) && (line.length() > 0)) {
 				rawTraceLines.get(rawTraceLines.size() - 1).appendMessage("\n"+ line);
 			}
 		}
@@ -176,10 +207,27 @@ public class TraceParser {
 	}
 
 	/**
+	 * Skips a trace line that does not have the expected format. The first {@link #MAX_REPORTED_SKIPPED_LINES} skipped
+	 * lines are reported in the log, the rest are only counted.
+	 * @param line the trace line to be skipped
+	 */
+	private void skipLine(String line) {
+		skippingTrace = true;
+		skippedLines++;
+		if (skippedLines <= MAX_REPORTED_SKIPPED_LINES) {
+			if (line.length() > MAX_REPORTED_LINE_LENGTH)
+				line = line.substring(0, MAX_REPORTED_LINE_LENGTH) + "...";
+			GUIStatic.printLog("Skipped line " + lineNumber + " with unexpected format: " + line, StyledTextPane.WARNING);
+		}
+	}
+
+	/**
 	 * Returns the list of found calls by the {@link CallParser}.
-	 * @return the list of found calls
+	 * @return the list of found calls, an empty list if the parsing did not reach the call analysis
 	 */
 	public ArrayList<Call> getCalls() {
+		if (callParser == null)
+			return new ArrayList<Call>();
 		return callParser.getCalls();
 	}
 }

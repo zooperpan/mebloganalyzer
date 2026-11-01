@@ -7,12 +7,12 @@ import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -35,6 +35,11 @@ import meb.entities.Call;
 public class MainFrame extends JFrame {
 
 	private static final long serialVersionUID = MEBStatic.serialVersionUID;
+
+	/**
+	 * Flavor for dropped files given as a list of URIs, used by some Linux file managers instead of the java file list flavor.
+	 */
+	private static final DataFlavor uriListFlavor = createUriListFlavor();
 
 	private JDesktopPane desktop = null;
 	private LinkedList<CallFrame> callFrames = null;
@@ -67,6 +72,15 @@ public class MainFrame extends JFrame {
 		contentPane.add(createLogArea(), BorderLayout.SOUTH);
 	}
 
+	private static DataFlavor createUriListFlavor() {
+		try {
+			return new DataFlavor("text/uri-list;class=java.lang.String");
+		} catch (ClassNotFoundException e) {
+			// Cannot happen, java.lang.String is always available
+			throw new IllegalStateException(e);
+		}
+	}
+
 	private JMenuBar createMenuBar(final JDesktopPane desktop) {
 		JMenuBar menuBar = new JMenuBar();
 		return menuBar;
@@ -82,11 +96,11 @@ public class MainFrame extends JFrame {
 		 * @param transferFlavors - the data formats available.
 		 */
 		public boolean canImport(JComponent comp, DataFlavor[] transferFlavors) {
-			if (transferFlavors.length != 1) 
-				return false;
-			DataFlavor flavor = transferFlavors[0];
-			if (flavor.equals(DataFlavor.javaFileListFlavor)) {
-				return true;
+			// The drop source may offer many flavors (e.g. on Linux), accept it if any of them is a file list
+			for (DataFlavor flavor: transferFlavors) {
+				if (flavor.equals(DataFlavor.javaFileListFlavor) || flavor.equals(uriListFlavor)) {
+					return true;
+				}
 			}
 			// Didn't find any that match, so:
 			return false;
@@ -99,28 +113,54 @@ public class MainFrame extends JFrame {
 		 * @param t - the data to import.
 		 */
 		public boolean importData(JComponent comp, Transferable t) {
-			DataFlavor[] flavors = t.getTransferDataFlavors();
-			if (flavors.length > 1) return false;
-			DataFlavor flavor = flavors[0];
 			try {
-				if (flavor.equals(DataFlavor.javaFileListFlavor)) {
-					List<?> fileList = (List<?>) t.getTransferData(DataFlavor.javaFileListFlavor);
-					for (int i = 0; i < fileList.size(); i++) {
-						File file = (File) fileList.get(i);
-						String path = file.getCanonicalPath();
-						String filename = file.getName();
-						GUIStatic.printLog("Please wait while trying to analyze file " + path, StyledTextPane.MESSAGE);
-						javax.swing.SwingUtilities.invokeLater(new Runnable() {
-							public void run() {
-								(new ParseWorker(getFrame(), path, filename)).execute();
-							}
-						});
-					}
-					return true;
-				} else return false;
+				List<File> fileList = getFileList(t);
+				if (fileList == null) return false;
+				for (File file: fileList) {
+					String path = file.getCanonicalPath();
+					String filename = file.getName();
+					GUIStatic.printLog("Please wait while trying to analyze file " + path, StyledTextPane.MESSAGE);
+					javax.swing.SwingUtilities.invokeLater(new Runnable() {
+						public void run() {
+							(new ParseWorker(getFrame(), path, filename)).execute();
+						}
+					});
+				}
+				return true;
 			} catch (IOException ex) {
 			} catch (UnsupportedFlavorException e) {}
 			return false;
+		}
+
+		/**
+		 * Returns the list of dropped files. Uses the java file list flavor if available, otherwise the
+		 * <code>text/uri-list</code> flavor that some Linux file managers provide instead.
+		 * @param t the dropped data
+		 * @return the list of dropped files, null if the data does not contain files
+		 */
+		private List<File> getFileList(Transferable t) throws UnsupportedFlavorException, IOException {
+			List<File> files = new ArrayList<File>();
+			if (t.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+				for (Object o: (List<?>) t.getTransferData(DataFlavor.javaFileListFlavor)) {
+					files.add((File) o);
+				}
+				return files;
+			}
+			if (t.isDataFlavorSupported(uriListFlavor)) {
+				String uriList = (String) t.getTransferData(uriListFlavor);
+				for (String uri: uriList.split("\r\n|\n")) {
+					uri = uri.trim();
+					// Lines starting with '#' are comments in a uri-list
+					if (uri.isEmpty() || uri.startsWith("#")) continue;
+					try {
+						files.add(new File(new URI(uri)));
+					} catch (URISyntaxException | IllegalArgumentException e) {
+						GUIStatic.printLog("Ignoring dropped item that is not a local file: " + uri, StyledTextPane.WARNING);
+					}
+				}
+				return files;
+			}
+			return null;
 		}
 	}
 
@@ -136,13 +176,8 @@ public class MainFrame extends JFrame {
 			}
 		});
 		clearLogPopup.add(clearLogMenuItem);
-		txtpnLog.addMouseListener(new MouseAdapter() {
-			public void mouseReleased(MouseEvent e) {
-				if(e.isPopupTrigger()) {
-					clearLogPopup.show(txtpnLog, e.getX(), e.getY());
-				}
-			}
-		});
+		// Swing shows the popup on the right platform trigger (mouse press on Linux, mouse release on Windows)
+		txtpnLog.setComponentPopupMenu(clearLogPopup);
 		txtpnLog.setEditable(false);
 		JPanel logPanel = new JPanel(new BorderLayout());
 		logPanel.setPreferredSize(new Dimension(700, 200));
