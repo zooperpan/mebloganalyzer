@@ -37,7 +37,19 @@ MEB traces are long, interleaved logs written by several internal components at 
 
 The project is in the [`MEBLogAnalyzer/`](MEBLogAnalyzer) folder. The entry point is `main.MainMEB`.
 
-### Command line
+### Maven
+
+Building with Maven needs [Apache Maven](https://maven.apache.org/) 3.6 or later.
+
+```bash
+cd MEBLogAnalyzer
+mvn package
+java -jar target/mebloganalyzer-1.0.0.jar
+```
+
+`mvn package` produces a runnable JAR in `target/`. The JAR has no dependencies, so you can copy it anywhere and start it with `java -jar`. On most desktops you can also double-click it.
+
+### Without Maven
 
 ```bash
 cd MEBLogAnalyzer
@@ -48,12 +60,12 @@ java -cp bin main.MainMEB
 ### VS Code
 
 1. Install the **Extension Pack for Java**.
-2. Open the `MEBLogAnalyzer` folder.
+2. Open the `MEBLogAnalyzer` folder. VS Code picks up the Maven project from `pom.xml`.
 3. Open `src/main/MainMEB.java` and click **Run** above the `main` method, or press F5.
 
 ### Eclipse
 
-Use **File → Import → General → Existing Projects into Workspace** and select the `MEBLogAnalyzer` folder. Then run `main.MainMEB` as a Java Application.
+Use **File → Import → Maven → Existing Maven Projects** and select the `MEBLogAnalyzer` folder. Alternatively, use **General → Existing Projects into Workspace**. Then run `main.MainMEB` as a Java Application.
 
 ## Usage
 
